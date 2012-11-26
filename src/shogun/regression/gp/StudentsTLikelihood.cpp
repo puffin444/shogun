@@ -18,6 +18,7 @@
 #include <shogun/mathematics/Statistics.h>
 #include <shogun/base/Parameter.h>
 #include <shogun/mathematics/eigen3.h>
+#include <iostream>
 
 using namespace shogun;
 using namespace Eigen;
@@ -300,6 +301,237 @@ SGVector<float64_t> CStudentsTLikelihood::get_second_derivative(
 	sgresult[0] = CMath::INFTY;
 	return sgresult;
 
+}
+
+	SGVector<float64_t> CStudentsTLikelihood::get_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		float64_t temp = lgamma(m_df/2.0+0.5) -
+			lgamma(m_df/2.0) - log(m_df*CMath::PI*m_sigma*m_sigma)/2.0;
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::get_h.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = (m_df+1)*(CMath::log(variance[i]*(1.0+(1.0/m_df))/
+					(m_sigma*m_sigma)) - 1) +
+					(m_df*m_sigma*m_sigma+(labels->get_labels()[i]*
+					labels->get_labels()[i])/variance[i]);
+		
+			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
+			{
+				result[i] = labels->get_labels()[i]*
+					labels->get_labels()[i]/(variance[i]);
+			}		
+	
+			result[i] = result[i] - 2*temp;	
+
+			if (variance[i] < 0)
+				result[i] = CMath::INFTY;
+		}
+
+		return result;
+	}
+		
+
+	SGVector<float64_t> CStudentsTLikelihood::get_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::get_b.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+			result[i] = (labels->get_labels()[i]/variance[i]);
+
+		return result;
+	}
+
+	SGVector<float64_t> CStudentsTLikelihood::get_first_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::\
+				get_first_derivative_h.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = (m_df+1)/variance[i] - 
+				    (m_df*m_sigma*m_sigma + 
+				    labels->get_labels()[i]*
+				    labels->get_labels()[i])/
+				    (variance[i]*variance[i]);
+
+			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
+			{
+				result[i] = -labels->get_labels()[i]*
+					labels->get_labels()[i]/
+					(variance[i]*variance[i]);
+			}		
+
+			if (variance[i] < 0)
+				result[i] = 0;
+		}
+
+		return result;
+}
+
+	SGVector<float64_t> CStudentsTLikelihood::get_first_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::get_first_derivative_b.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+				result[i] = -(labels->get_labels()[i])/
+					    (variance[i]*variance[i]);
+		}
+
+		return result;
+	}
+
+	SGVector<float64_t> CStudentsTLikelihood::get_second_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::\
+				get_second_derivative_h.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = -(m_df+1)/(variance[i]*variance[i]) +
+					2*(m_df*m_sigma*m_sigma + 
+					labels->get_labels()[i]*
+					labels->get_labels()[i])/
+					(variance[i]*variance[i]*variance[i]);
+
+			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
+			{
+				result[i] = 2*labels->get_labels()[i]*
+					labels->get_labels()[i]/
+					(variance[i]*variance[i]*variance[i]);
+			}		
+
+			if (variance[i] < 0)
+				result[i] = 0;
+		}
+
+		return result;
+}
+
+
+	SGVector<float64_t> CStudentsTLikelihood::get_second_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CStudentsTLikelihood::\
+				 get_second_derivative_b. \
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = 2*(labels->get_labels()[i])/
+					    (variance[i]*variance[i]*variance[i]);
+		}
+
+		return result;
+	}
+
+	SGVector<float64_t> CStudentsTLikelihood::get_first_derivative_h_param(CRegressionLabels* labels, TParameter* param, CSGObject* obj, SGVector<float64_t> variance)
+{
+
+	SGVector<float64_t> result(variance.vlen);
+
+	if (variance.vlen != labels->get_labels().vlen)
+	{
+		SG_ERROR("ERROR in CStudentsTLikelihood::\
+			 get_first_derivative_h_param. \
+			  Number of labels and variances do not match");
+	}
+
+	if (strcmp(param->m_name, "df") == 0 && obj == this)
+	{
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = m_df*CMath::log(variance[i]*(1.0+1.0/m_df)/
+				    (m_sigma*m_sigma)) - 1 - m_df + m_df*m_sigma*
+				    m_sigma/variance[i];
+
+			result[i] = result[i] - m_df*CStatistics::dlgamma(m_df/2.0+1/2.0) 
+				    + m_df*CStatistics::dlgamma(m_df/2.0) + 1;
+			
+			result[i] = (1-1/m_df)*result[i]; 
+
+			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
+			{
+				result[i] = 0;
+			}		
+
+			if (variance[i] < 0)
+				result[i] = 0;
+
+			result[i] = result[i]/(m_df-1);
+		}
+
+		return result;
+	}
+
+	if (strcmp(param->m_name, "sigma") == 0 && obj == this)
+	{
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = -2*(m_df+1) + 2*m_df*m_sigma*m_sigma/
+					(variance[i]*variance[i]);
+
+			result[i] = result[i] + 2;
+
+			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
+			{
+				result[i] = 0;
+			}		
+
+			if (variance[i] < 0)
+				result[i] = 0;
+
+
+			result[i] = result[i]/(m_sigma);
+		}
+
+		return result;
+	}
+
+	result[0] = CMath::INFTY;
+	return result;
 }
 
 #endif //HAVE_EIGEN3

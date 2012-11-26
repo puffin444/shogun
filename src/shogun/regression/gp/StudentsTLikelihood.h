@@ -34,6 +34,23 @@ public:
 	/*Constructor*/
 	CStudentsTLikelihood();
 
+	virtual SGVector<float64_t> get_h(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+
+	virtual SGVector<float64_t> get_b(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+
+	virtual SGVector<float64_t> get_first_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+	virtual SGVector<float64_t> get_first_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+	
+	virtual SGVector<float64_t> get_second_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+	virtual SGVector<float64_t> get_second_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance);
+	
+	virtual SGVector<float64_t> get_first_derivative_h_param(CRegressionLabels* labels, TParameter* param, CSGObject* obj, SGVector<float64_t> variance);
+
 	/*Destructor*/
 	virtual ~CStudentsTLikelihood();
 

@@ -50,6 +50,173 @@ SGVector<float64_t> CGaussianLikelihood::evaluate_variances(
 	return result;
 }
 
+	SGVector<float64_t> CGaussianLikelihood::get_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::get_h.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			if(variance[i] > m_sigma*m_sigma +1e-8 || variance[i] < 0)
+				result[i] = CMath::INFTY;
+			else
+			{	
+				result[i] = (labels->get_labels()[i]*
+					    labels->get_labels()[i])/variance[i]
+			 		  + CMath::log(2*CMath::PI*m_sigma*m_sigma);
+			}
+		}
+
+		return result;
+	}
+		
+
+	SGVector<float64_t> CGaussianLikelihood::get_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::get_b.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+			result[i] = (labels->get_labels()[i]/variance[i]);
+
+		return result;
+	}
+
+	SGVector<float64_t> CGaussianLikelihood::get_first_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::get_first_derivative_h.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			if(variance[i] > m_sigma*m_sigma +1e-8 || variance[i] < 0)
+				result[i] = 0;
+			else
+			{	
+				result[i] = -(labels->get_labels()[i]*
+					    labels->get_labels()[i])/
+					    (variance[i]*variance[i]);
+
+			}
+		}
+
+		return result;
+	}
+
+	SGVector<float64_t> CGaussianLikelihood::get_first_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::get_first_derivative_b.\
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+				result[i] = -(labels->get_labels()[i])/
+					    (variance[i]*variance[i]);
+		}
+
+		return result;
+	}
+
+	SGVector<float64_t> CGaussianLikelihood::get_second_derivative_h(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::\
+				 get_second_derivative_h. \
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			if(variance[i] > m_sigma*m_sigma +1e-8 || variance[i] < 0)
+				result[i] = 0;
+			else
+			{	
+				result[i] = 2*(labels->get_labels()[i])/
+					    (variance[i]*variance[i]*variance[i]);
+
+			}
+		}
+
+		return result;
+
+	}
+
+	SGVector<float64_t> CGaussianLikelihood::get_second_derivative_b(CRegressionLabels* labels, SGVector<float64_t> variance)
+	{
+		if (variance.vlen != labels->get_labels().vlen)
+		{
+			SG_ERROR("ERROR in CGaussianLikelihood::\
+				 get_second_derivative_b. \
+				  Number of labels and variances do not match");
+		}
+
+		SGVector<float64_t> result(variance.vlen);
+
+		for (index_t i = 0; i < labels->get_labels().vlen; i++)
+		{
+			result[i] = 2*(labels->get_labels()[i])/
+					    (variance[i]*variance[i]*variance[i]);
+		}
+
+		return result;
+	}
+
+	SGVector<float64_t> CGaussianLikelihood::get_first_derivative_h_param(CRegressionLabels* labels, TParameter* param, CSGObject* obj, SGVector<float64_t> variance)
+{
+
+	SGVector<float64_t> result(variance.vlen);
+
+	if (variance.vlen != labels->get_labels().vlen)
+	{
+		SG_ERROR("ERROR in CGaussianLikelihood::\
+			 get_second_derivative_b. \
+			  Number of labels and variances do not match");
+	}
+
+
+	if (strcmp(param->m_name, "sigma") || obj != this)
+	{
+		result[0] = CMath::INFTY;
+		return result;
+	}
+
+	for (index_t i = 0; i < result.vlen; i++)
+	{
+		if(variance[i] > m_sigma*m_sigma || variance[i] < 0)
+			result[i] = 0;
+
+		else
+			result[i] = 2/m_sigma;
+	}
+
+	return result;
+}
+
 float64_t CGaussianLikelihood::get_log_probability_f(CRegressionLabels* labels,
 		SGVector<float64_t> m_function)
 {
