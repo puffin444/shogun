@@ -14,7 +14,7 @@
 #include <shogun/features/DenseFeatures.h>
 #include <shogun/kernel/GaussianKernel.h>
 #include <shogun/mathematics/Math.h>
-#include <shogun/regression/gp/LaplacianInferenceMethod.h>
+#include <shogun/regression/gp/VBInferenceMethod.h>
 #include <shogun/regression/gp/StudentsTLikelihood.h>
 #include <shogun/regression/gp/GaussianLikelihood.h>
 #include <shogun/regression/gp/ZeroMean.h>
@@ -62,7 +62,7 @@ CModelSelectionParameters* build_tree(CInferenceMethod* inf,
 				      CLikelihoodModel* lik, CKernel* kernel)
 {
 	CModelSelectionParameters* root=new CModelSelectionParameters();
-/*
+
 	CModelSelectionParameters* c1 =
 			new CModelSelectionParameters("inference_method", inf);
 	root->append_child(c1);
@@ -94,9 +94,9 @@ CModelSelectionParameters* build_tree(CInferenceMethod* inf,
 			new CModelSelectionParameters("width");
 	c5->append_child(c6);
 	c6->build_values(2.0, 2.0, R_LINEAR);
-*/
 
-	CModelSelectionParameters* c1 =
+
+/*	CModelSelectionParameters* c1 =
 			new CModelSelectionParameters("inference_method", inf);
 	root->append_child(c1);
 
@@ -120,7 +120,7 @@ CModelSelectionParameters* build_tree(CInferenceMethod* inf,
 	CModelSelectionParameters* c6 =
 			new CModelSelectionParameters("width");
 	c5->append_child(c6);
-	c6->build_values(2.0, 2.0, R_LINEAR);
+	c6->build_values(2.0, 2.0, R_LINEAR);*/
 	return root;
 }
 
@@ -154,7 +154,7 @@ int main(int argc, char **argv)
 	CDenseFeatures<float64_t>* features2=new CDenseFeatures<float64_t> ();
 	features2->set_feature_matrix(matrix2);
 
-	SG_REF(features);
+	SG_REF(features); 
 	SG_REF(features2);
 
 	SG_REF(labels);
@@ -168,13 +168,13 @@ int main(int argc, char **argv)
 	CZeroMean* mean = new CZeroMean();
 	
 	/*Allocate our likelihood function*/
-	//CStudentsTLikelihood* lik = new CStudentsTLikelihood();
+	CStudentsTLikelihood* lik = new CStudentsTLikelihood();
 
-	CGaussianLikelihood* lik = new CGaussianLikelihood();
+	//CGaussianLikelihood* lik = new CGaussianLikelihood();
 
 	/*Allocate our inference method*/
-	CLaplacianInferenceMethod* inf =
-			new CLaplacianInferenceMethod(test_kernel, 
+	CVBInferenceMethod* inf =
+			new CVBInferenceMethod(test_kernel, 
 						  features, mean, labels, lik);
 
 	SG_REF(inf);
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 	CGradientModelSelection* grad_search=new CGradientModelSelection(
 			root, grad);
 
-	grad_search->set_max_evaluations(1);
+	grad_search->set_max_evaluations(0);
 	/* set autolocking to false to get rid of warnings */
 	grad->set_autolock(false);
 
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 	SGVector<float64_t> labe = labels->get_labels();
 	SGVector<float64_t> diagonal = inf->get_diagonal_vector();
 	SGMatrix<float64_t> cholesky = inf->get_cholesky();
-	
+
 	gp->set_return_type(CGaussianProcessRegression::GP_RETURN_COV);
 
 	CRegressionLabels* covariance = gp->apply_regression(features);
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
 	
 	CRegressionLabels* predictions = gp->apply_regression();
 
-	lik->get_first_derivative_h_param(labels, lik->m_parameters->get_parameter(1), lik, var).display_vector("h");
+	//lik->get_first_derivative_h_param(labels, lik->m_parameters->get_parameter(1), lik, var).display_vector("h");
 
 	//lik->get_second_derivative_h(labels, var).display_vector("h");
 
