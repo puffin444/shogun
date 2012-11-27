@@ -160,6 +160,7 @@ void CVBInferenceMethod::init()
 	m_max = 5;
 	smax = 5; 
 	ep = 1e-8;
+	m_lz = 0;
 }
 
 CVBInferenceMethod::~CVBInferenceMethod()
@@ -260,16 +261,57 @@ CMap<TParameter*, SGVector<float64_t> > CVBInferenceMethod::
 get_marginal_likelihood_derivatives(CMap<TParameter*,
 		CSGObject*>& para_dict)
 {
-	VectorXd sum(1);
-	sum[0] = 0;
+	check_members();
+
+
+
+	if(update_parameter_hash())
+		update_all();
 
 	m_kernel->build_parameter_dictionary(para_dict);
 	m_mean->build_parameter_dictionary(para_dict);
 	m_model->build_parameter_dictionary(para_dict);
 
+	m_b = m_model->get_b((CRegressionLabels*)m_labels, m_variances);
+	MatrixXd iKtil(m_Ktil.num_rows, m_Ktil.num_cols);
+
+	MatrixXd eigen_chol(m_L.num_rows, m_L.num_cols);
+
+	Map<MatrixXd> eigen_temp_kernel(temp_kernel.matrix, 
+        	temp_kernel.num_rows, temp_kernel.num_cols);
+
+	for (index_t i = 0; i < m_L.num_rows; i++)
+	{
+		for (index_t j = 0; j < m_L.num_cols; j++)
+			eigen_chol(i,j) = m_L(i,j);
+	}
+
+	VectorXd eigen_b(m_b.vlen);
+	
+	for (index_t i = 0; i < m_b.vlen; i++)
+		eigen_b[i] = m_b[i];
+
+	VectorXd eigen_W(W.vlen);
+	
+	for (index_t i = 0; i < W.vlen; i++)
+		eigen_W[i] = W[i];
+
+	VectorXd eigen_alpha(m_alpha.vlen);
+	
+	for (index_t i = 0; i < m_alpha.vlen; i++)
+		eigen_alpha[i] = m_alpha[i];
+
+	for (index_t i = 0; i < m_Ktil.num_rows; i++)
+	{
+		for (index_t j = 0; j < m_Ktil.num_cols; j++)
+			iKtil(i,j) = m_Ktil(i,j);
+	}
+
 	CMap<TParameter*, SGVector<float64_t> > gradient(
 			3+para_dict.get_num_elements(),
 			3+para_dict.get_num_elements());
+
+	VectorXd sum(1);
 
 	for (index_t i = 0; i < para_dict.get_num_elements(); i++)
 	{
@@ -290,46 +332,100 @@ get_marginal_likelihood_derivatives(CMap<TParameter*,
 
 		bool deriv_found = false;
 
+		Map<VectorXd> eigen_temp_alpha(temp_alpha.vector,
+			temp_alpha.vlen);
+
 		for (index_t h = 0; h < length; h++)
 		{
-
+			sum[0] = 0;
 			SGMatrix<float64_t> deriv;
 			SGVector<float64_t> mean_derivatives;
 			VectorXd mean_dev_temp;
 			SGVector<float64_t> lik_first_deriv;
-			SGVector<float64_t> lik_second_deriv;
 
 			if (param->m_datatype.m_ctype == CT_VECTOR ||
 					param->m_datatype.m_ctype == CT_SGVECTOR)
 			{
+				deriv = m_kernel->get_parameter_gradient(param, obj);
+
+				mean_derivatives = m_mean->get_parameter_derivative(
+						param, obj, m_feature_matrix, h);
+
+				lik_first_deriv = m_model->get_first_derivative_h_param((CRegressionLabels*)m_labels,param, obj, m_variances);
+
+				for (index_t d = 0; d < mean_derivatives.vlen; d++)
+					mean_dev_temp[d] = mean_derivatives[d];
 			}
 
 			else
 			{
 				mean_derivatives = m_mean->get_parameter_derivative(
 						param, obj, m_feature_matrix);
-
 				for (index_t d = 0; d < mean_derivatives.vlen; d++)
 					mean_dev_temp[d] = mean_derivatives[d];
 
 				deriv = m_kernel->get_parameter_gradient(param, obj);
 
+				lik_first_deriv = m_model->get_first_derivative_h_param((CRegressionLabels*)m_labels,param, obj, m_variances);
+
 			}
 
 			if (deriv.num_cols*deriv.num_rows > 0)
 			{
-				
+				MatrixXd dK(deriv.num_cols, deriv.num_rows);
 
-				variables[h] = 0;
+				for (index_t d = 0; d < deriv.num_rows; d++)
+				{
+					for (index_t s = 0; s < deriv.num_cols; s++)
+						dK(d,s) = deriv(d,s);
+				}
+
+				sum[0] = (iKtil.cwiseProduct(dK)).sum()/2.0;
+	
+				VectorXd v = iKtil*(eigen_b.cwiseProduct(eigen_W));
+
+				sum[0] -= (v.transpose()*dK*v).sum()/2.0;
+
+				variables[h] = sum[0];
 
 				deriv_found = true;
 			}
 
 			else if (mean_derivatives.vlen > 0)
 			{
-
-				variables[h] = 0;
+				sum = -eigen_alpha.transpose()*mean_dev_temp;
+				variables[h] = sum[0];
 				deriv_found = true;
+			}
+
+			else if (lik_first_deriv[0] != CMath::INFTY)
+			{
+
+				if (m_model->get_model_type() == LT_GAUSSIAN)
+				{
+					MatrixXd temp1 = eigen_chol.colPivHouseholderQr().solve(MatrixXd::Identity(eigen_temp_kernel.rows(), eigen_temp_kernel.cols()));
+
+					temp1 = temp1.cwiseProduct(temp1);
+
+					sum[0] = temp1.sum();
+
+		float64_t m_sigma = ((CGaussianLikelihood*)m_model)->get_sigma();
+
+					sum[0] -= m_sigma*m_sigma*(eigen_alpha*eigen_alpha.transpose()).sum();
+
+					variables[h] = sum[0];
+					deriv_found = true;
+
+				}
+
+				else
+				{
+					sum[0] = 0;
+ 					for (index_t dd = 0; dd < lik_first_deriv.vlen; dd++)
+						sum[0] += lik_first_deriv[dd]/2.0;
+					variables[h] = sum[0];
+					deriv_found = true;
+				}			
 			}
 
 		}
@@ -351,9 +447,17 @@ get_marginal_likelihood_derivatives(CMap<TParameter*,
 			dK(d,s) = m_ktrtr(d,s)*m_scale*2.0;;
 	}
 
+
+
+	sum[0] = (iKtil.cwiseProduct(dK)).sum()/2.0;
+
+	VectorXd v = iKtil*(eigen_b.cwiseProduct(eigen_W));
+
+	sum[0] -= (v.transpose()*dK*v).sum()/2.0;
+
 	SGVector<float64_t> scale(1);
-	sum[0] = 0;
-	scale[0] = 0;
+
+	scale[0] = sum[0];
 
 	gradient.add(param, scale);
 	para_dict.add(param, this);
@@ -374,7 +478,7 @@ SGVector<float64_t> CVBInferenceMethod::get_diagonal_vector()
 
 float64_t CVBInferenceMethod::get_negative_marginal_likelihood()
 {
- return 0;
+ return m_lz;
 }
 
 SGVector<float64_t> CVBInferenceMethod::get_alpha()
@@ -434,13 +538,14 @@ void CVBInferenceMethod::update_alpha()
 
 	Map<MatrixXd> eigen_temp_kernel(temp_kernel.matrix, temp_kernel.num_rows, temp_kernel.num_cols);
 
+	m_Ktil = SGMatrix<float64_t>(temp_kernel.num_rows, temp_kernel.num_cols);
+
 	if (m_model->get_model_type() == LT_GAUSSIAN)
 	{
 		variance = VectorXd::Constant(temp_kernel.num_cols, 1);
 		float64_t m_sigma = ((CGaussianLikelihood*)m_model)->get_sigma();
 		variance = variance*m_sigma*m_sigma;
 
-		std::cout << variance << std::endl;
 	}
 /*
   % INNER compute the Newton direction of ga
@@ -451,7 +556,6 @@ void CVBInferenceMethod::update_alpha()
     itinner = itinner+1;
 
   end*/
-
 
 	else
 	{
@@ -505,8 +609,14 @@ void CVBInferenceMethod::update_alpha()
 
 			chol = temp2.transpose().colPivHouseholderQr().solve(chol);
 
-
 			MatrixXd iKtil = temp1.cwiseProduct(chol);
+
+
+			for(index_t i = 0; i < iKtil.rows(); i++)
+			{
+				for(index_t j = 0; j < iKtil.cols(); j++)
+					m_Ktil(i,j) = iKtil(i,j);
+			}
 
 			MatrixXd Khat = eigen_temp_kernel - C.transpose()*C;
 			
@@ -605,6 +715,7 @@ void CVBInferenceMethod::update_alpha()
 			MatrixXd chol = L.matrixL();
 			MatrixXd temp2 = L.matrixL();
 
+
 			MatrixXd temp1 = eigen_sW.rowwise().replicate(eigen_temp_kernel.rows());
 		
 			MatrixXd arg = eigen_sW.asDiagonal();
@@ -637,6 +748,19 @@ void CVBInferenceMethod::update_alpha()
 
 			for (index_t i = 0; i < m_alpha.vlen; i++)
 				m_alpha[i] = eigen_alpha[i];
+
+			m_variances = SGVector<float64_t>(variance.rows());
+
+			for (index_t i = 0; i < m_variances.vlen; i++)
+				m_variances[i] = variance[i];
+
+			SGVector<float64_t> m_b(eigen_b.rows());
+	
+			for (index_t i = 0; i < m_b.vlen; i++)
+				m_b[i] = eigen_b[i];
+		
+			m_lz = Psi_New;
+
 
 }
 

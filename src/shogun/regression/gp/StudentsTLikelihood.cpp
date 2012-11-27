@@ -321,13 +321,15 @@ SGVector<float64_t> CStudentsTLikelihood::get_second_derivative(
 		{
 			result[i] = (m_df+1)*(CMath::log(variance[i]*(1.0+(1.0/m_df))/
 					(m_sigma*m_sigma)) - 1) +
-					(m_df*m_sigma*m_sigma+(labels->get_labels()[i]*
-					labels->get_labels()[i])/variance[i]);
+					((m_df*m_sigma*m_sigma+(labels->get_labels()[i]*
+					labels->get_labels()[i]))/variance[i]);
 		
 			if (variance[i] <= m_sigma*m_sigma*m_df/(m_df+1))
 			{
+
 				result[i] = labels->get_labels()[i]*
 					labels->get_labels()[i]/(variance[i]);
+
 			}		
 	
 			result[i] = result[i] - 2*temp;	

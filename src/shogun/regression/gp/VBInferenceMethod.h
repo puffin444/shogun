@@ -284,6 +284,12 @@ private:
 	float64_t ep;
 
 	float64_t smax;
+
+	SGMatrix<float64_t> m_Ktil;
+	SGVector<float64_t> m_b;
+
+	SGVector<float64_t> m_variances;
+	float64_t m_lz;
 };
 
 }
